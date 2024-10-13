@@ -7,6 +7,9 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { AuthProvider } from "./contexts/auth";
 import "./tailwind.css";
 
 export const links: LinksFunction = () => [
@@ -23,6 +26,7 @@ export const links: LinksFunction = () => [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const queryClient = useMemo(() => new QueryClient(), []);
   return (
     <html lang="en">
       <head>
@@ -32,7 +36,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryClientProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

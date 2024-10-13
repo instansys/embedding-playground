@@ -23,27 +23,27 @@ import { Provider, modelsByProvider } from "@/lib/models";
 import {
   EmbeddingHistory,
   FormState,
+  fetchHistories,
   formStateSchema,
-  loadHistories,
   loadState,
   saveState,
 } from "@/lib/state";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocalStorageState } from "ahooks";
 import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Controller, useForm } from "react-hook-form";
 
-import { DialogHeader } from "@/components/ui/dialog";
-import { SideMenu } from "@/components/ui/sidemenu";
+import HistorySideMenu from "@/components/HistorySideMenu";
 import { VectorsPreviewDialog } from "@/components/VectorsPreviewDialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@radix-ui/react-dialog";
+import { SideMenu } from "@/components/ui/sidemenu";
+import { FormContext } from "@/contexts/form";
 import type { MetaFunction } from "@remix-run/node";
 import * as _ from "lodash";
 
@@ -92,16 +92,18 @@ export default function Index() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const formMethods = useForm<FormState>({
+    resolver: zodResolver(formStateSchema),
+    defaultValues: loadState(),
+  });
+
   const {
     control,
     handleSubmit,
     watch,
     setValue,
-    formState: { isValid, errors },
-  } = useForm<FormState>({
-    resolver: zodResolver(formStateSchema),
-    defaultValues: loadState(),
-  });
+    formState: { errors, isValid },
+  } = formMethods;
 
   const provider = watch("provider") as Provider;
   const model = watch("model") as string;
@@ -138,7 +140,7 @@ export default function Index() {
 
   const [histories, setHistories] = useState<EmbeddingHistory[]>([]);
   useEffect(() => {
-    loadHistories().then(setHistories);
+    fetchHistories().then(setHistories);
   }, []);
   // const saveHistory = useCallback(
   //   (history: FormState) => {
@@ -149,15 +151,8 @@ export default function Index() {
   // );
 
   return (
-    <>
-      <SideMenu side="right">
-        <ul>
-          <li className="mb-2">Clear</li>
-          {histories.map((history) => (
-            <li key={history.id}>{history.leftText}</li>
-          ))}
-        </ul>
-      </SideMenu>
+    <FormContext.Provider value={formMethods}>
+      <HistorySideMenu side="right" />
       <div className="container flex items-center justify-center mx-auto">
         <div className="w-full max-w-6xl mx-auto p-16">
           <h1 className="text-3xl font-bold mb-4">Embedding Playground</h1>
@@ -356,6 +351,6 @@ export default function Index() {
           </form>
         </div>
       </div>
-    </>
+    </FormContext.Provider>
   );
 }

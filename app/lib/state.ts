@@ -1,4 +1,12 @@
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+} from "firebase/firestore";
 import { z } from "zod";
+import { getStore } from "./firebase";
 import { providers } from "./models";
 
 // Define form schema
@@ -23,10 +31,14 @@ export type FormState = z.infer<typeof formStateSchema>;
 export const getStateFromHistory = (history: EmbeddingHistory): FormState => {
   return {
     ...history,
+    apiKeys: loadState().apiKeys,
   };
 };
 
-export type EmbeddingHistory = FormState & { id: number; createdAt: Date };
+export type EmbeddingHistory = Omit<FormState, "apiKeys"> & {
+  id: number;
+  createdAt: Date;
+};
 
 const defaultState = {
   provider: "openai",
@@ -54,41 +66,35 @@ export const clearState = () => {
   localStorage.removeItem(stateKey);
 };
 
-export const saveHistory = async (history: FormState) => {
-  const db = await openDB("embedding-playground", 1, (db) => {
-    db.createObjectStore("histories", { autoIncrement: true });
-  });
-  const tx = db.transaction("histories", "readwrite");
-  const store = tx.objectStore("histories");
-  store.add(history);
+export const saveHistory = async (formState: FormState) => {
+  const { apiKeys, ...rest } = formState;
+  try {
+    await addDoc(collection(getStore(), "histories"), {
+      ...rest,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.error("An error occurred while saving a history:", error);
+  }
 };
 
-export const loadHistories = async (): Promise<EmbeddingHistory[]> => {
-  const db = await openDB("embedding-playground", 1);
-  const tx = db.transaction("histories", "readonly");
-  const store = tx.objectStore("histories");
-  return (await store.getAll()) as unknown as EmbeddingHistory[];
+export const fetchHistories = async (): Promise<EmbeddingHistory[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(getStore(), "histories"));
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as unknown as EmbeddingHistory[];
+  } catch (error) {
+    console.error("An error occurred while loading histories:", error);
+    return [];
+  }
 };
 
-export const removeHistory = async (id: number) => {
-  const db = await openDB("embedding-playground", 1);
-  const tx = db.transaction("histories", "readwrite");
-  const store = tx.objectStore("histories");
-  store.delete(id);
-};
-
-// IndexedDBを開くためのヘルパー関数
-const openDB = (
-  name: string,
-  version: number,
-  upgradeCallback?: (db: IDBDatabase) => void
-) => {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(name, version);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    if (upgradeCallback) {
-      request.onupgradeneeded = (event) => upgradeCallback(request.result);
-    }
-  });
+export const removeHistory = async (id: string) => {
+  try {
+    await deleteDoc(doc(getStore(), "histories", id));
+  } catch (error) {
+    console.error("An error occurred while deleting a history:", error);
+  }
 };

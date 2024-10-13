@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { RiMenuUnfoldLine } from "react-icons/ri";
+import { MdMenuOpen } from "react-icons/md";
+
+export type SideMenuSide = "left" | "right";
 
 type SideMenuProps = {
   children: React.ReactNode;
-  side: "left" | "right";
+  side: SideMenuSide;
   bgColor?: string;
+  width?: number | string;
   openAreaWidth?: number;
 };
 
@@ -12,6 +15,7 @@ export const SideMenu = ({
   children,
   side,
   bgColor = "white",
+  width = "20rem",
   openAreaWidth = 100,
 }: SideMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -49,7 +53,16 @@ export const SideMenu = ({
           : "-right-full"
       }`}
     >
-      <div className="w-64 p-4">{children}</div>
+      <MdMenuOpen
+        size="3rem"
+        className={`fixed top-1/2 -translate-y-1/2 cursor-pointer 
+          transition-all duration-300
+          ${isOpen ? "opacity-0" : "opacity-100"}
+          ${side === "left" ? "left-4" : "right-4"}`}
+      />
+      <div className="p-4" style={{ width }}>
+        {children}
+      </div>
     </div>
   );
 };
