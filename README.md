@@ -1,40 +1,43 @@
-# Welcome to Remix!
+# Embedding Playground
 
-- 📖 [Remix docs](https://remix.run/docs)
+This project provides an interactive playground for comparing text similarities using various embedding models.
 
-## Development
+## Features
 
-Run the dev server:
+- Compare the similarity between two texts using embeddings
+- Support for multiple providers (OpenAI, Voyage AI)
+- Visual representation of similarity using a gauge
+- Vector preview functionality
+- API key management for different providers
 
-```shellscript
-npm run dev
-```
+## Getting Started
 
-## Deployment
+1. Clone the repository
+2. Install dependencies: `bun i`
+3. Run the development server: `bun run dev`
+4. Open your browser and navigate to `http://localhost:5173`
 
-First, build your app for production:
+## Usage
 
-```sh
-npm run build
-```
+1. Select a provider from the dropdown menu
+2. Choose an embedding model
+3. Enter your API key for the selected provider
+4. Input two texts you want to compare
+5. Click "Calculate Similarity" to see the results
 
-Then run the app in production mode:
+## Technologies Used
 
-```sh
-npm start
-```
+- React
+- TypeScript
+- Remix
+- Tailwind CSS
+- Radix UI
 
-Now you'll need to pick a host to deploy it to.
+## Contributing
 
-### DIY
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-If you're familiar with deploying Node applications, the built-in Remix app server is production-ready.
+## License
 
-Make sure to deploy the output of `npm run build`
+This project is licensed under the GPL-3.0 License.
 
-- `build/server`
-- `build/client`
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever css framework you prefer. See the [Vite docs on css](https://vitejs.dev/guide/features.html#css) for more information.

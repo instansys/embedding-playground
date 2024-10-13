@@ -1,138 +1,361 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { getEmbeddings } from "@/lib/embedding";
+import { Provider, modelsByProvider } from "@/lib/models";
+import {
+  EmbeddingHistory,
+  FormState,
+  formStateSchema,
+  loadHistories,
+  loadState,
+  saveState,
+} from "@/lib/state";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useLocalStorageState } from "ahooks";
+import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+
+import { DialogHeader } from "@/components/ui/dialog";
+import { SideMenu } from "@/components/ui/sidemenu";
+import { VectorsPreviewDialog } from "@/components/VectorsPreviewDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@radix-ui/react-dialog";
 import type { MetaFunction } from "@remix-run/node";
+import * as _ from "lodash";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "New Remix App" },
-    { name: "description", content: "Welcome to Remix!" },
+    { title: "Embedding Playground" },
+    {
+      name: "description",
+      content: "Check the similarity between two texts using embeddings",
+    },
   ];
 };
+// Mock function for cosine similarity calculation
+const cosineSimilarity = (vec1: number[], vec2: number[]) => {
+  const dotProduct = vec1.reduce((sum, val, i) => sum + val * vec2[i], 0);
+  const magnitude1 = Math.sqrt(vec1.reduce((sum, val) => sum + val * val, 0));
+  const magnitude2 = Math.sqrt(vec2.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magnitude1 * magnitude2);
+};
 
-export default function Index() {
+const SimilarityGauge = ({ similarity }: { similarity: number | null }) => {
+  const percentage = similarity !== null ? similarity * 100 : 0;
+  const color =
+    similarity !== null
+      ? `hsl(${similarity * 120}, 100%, 50%)`
+      : "hsl(0, 0%, 80%)";
+
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="flex flex-col items-center gap-16">
-        <header className="flex flex-col items-center gap-9">
-          <h1 className="leading text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Welcome to <span className="sr-only">Remix</span>
-          </h1>
-          <div className="h-[144px] w-[434px]">
-            <img
-              src="/logo-light.png"
-              alt="Remix"
-              className="block w-full dark:hidden"
-            />
-            <img
-              src="/logo-dark.png"
-              alt="Remix"
-              className="hidden w-full dark:block"
-            />
-          </div>
-        </header>
-        <nav className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-gray-200 p-6 dark:border-gray-700">
-          <p className="leading-6 text-gray-700 dark:text-gray-200">
-            What&apos;s next?
-          </p>
-          <ul>
-            {resources.map(({ href, text, icon }) => (
-              <li key={href}>
-                <a
-                  className="group flex items-center gap-3 self-stretch p-3 leading-normal text-blue-700 hover:underline dark:text-blue-500"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {icon}
-                  {text}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+    <div className="relative w-full h-8 bg-gray-200 rounded-full overflow-hidden">
+      <div
+        className="absolute top-0 left-0 h-full transition-all duration-500 ease-out"
+        style={{ width: `${percentage}%`, backgroundColor: color }}
+      />
+      <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center text-sm font-bold text-gray-800">
+        {similarity !== null ? `${percentage.toFixed(2)}%` : "N/A"}
       </div>
     </div>
   );
-}
+};
 
-const resources = [
-  {
-    href: "https://remix.run/start/quickstart",
-    text: "Quick Start (5 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M8.51851 12.0741L7.92592 18L15.6296 9.7037L11.4815 7.33333L12.0741 2L4.37036 10.2963L8.51851 12.0741Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/start/tutorial",
-    text: "Tutorial (30 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M4.561 12.749L3.15503 14.1549M3.00811 8.99944H1.01978M3.15503 3.84489L4.561 5.2508M8.3107 1.70923L8.3107 3.69749M13.4655 3.84489L12.0595 5.2508M18.1868 17.0974L16.635 18.6491C16.4636 18.8205 16.1858 18.8205 16.0144 18.6491L13.568 16.2028C13.383 16.0178 13.0784 16.0347 12.915 16.239L11.2697 18.2956C11.047 18.5739 10.6029 18.4847 10.505 18.142L7.85215 8.85711C7.75756 8.52603 8.06365 8.21994 8.39472 8.31453L17.6796 10.9673C18.0223 11.0653 18.1115 11.5094 17.8332 11.7321L15.7766 13.3773C15.5723 13.5408 15.5554 13.8454 15.7404 14.0304L18.1868 16.4767C18.3582 16.6481 18.3582 16.926 18.1868 17.0974Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/docs",
-    text: "Remix Docs",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M9.99981 10.0751V9.99992M17.4688 17.4688C15.889 19.0485 11.2645 16.9853 7.13958 12.8604C3.01467 8.73546 0.951405 4.11091 2.53116 2.53116C4.11091 0.951405 8.73546 3.01467 12.8604 7.13958C16.9853 11.2645 19.0485 15.889 17.4688 17.4688ZM2.53132 17.4688C0.951566 15.8891 3.01483 11.2645 7.13974 7.13963C11.2647 3.01471 15.8892 0.951453 17.469 2.53121C19.0487 4.11096 16.9854 8.73551 12.8605 12.8604C8.73562 16.9853 4.11107 19.0486 2.53132 17.4688Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://rmx.as/discord",
-    text: "Join Discord",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 24 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M15.0686 1.25995L14.5477 1.17423L14.2913 1.63578C14.1754 1.84439 14.0545 2.08275 13.9422 2.31963C12.6461 2.16488 11.3406 2.16505 10.0445 2.32014C9.92822 2.08178 9.80478 1.84975 9.67412 1.62413L9.41449 1.17584L8.90333 1.25995C7.33547 1.51794 5.80717 1.99419 4.37748 2.66939L4.19 2.75793L4.07461 2.93019C1.23864 7.16437 0.46302 11.3053 0.838165 15.3924L0.868838 15.7266L1.13844 15.9264C2.81818 17.1714 4.68053 18.1233 6.68582 18.719L7.18892 18.8684L7.50166 18.4469C7.96179 17.8268 8.36504 17.1824 8.709 16.4944L8.71099 16.4904C10.8645 17.0471 13.128 17.0485 15.2821 16.4947C15.6261 17.1826 16.0293 17.8269 16.4892 18.4469L16.805 18.8725L17.3116 18.717C19.3056 18.105 21.1876 17.1751 22.8559 15.9238L23.1224 15.724L23.1528 15.3923C23.5873 10.6524 22.3579 6.53306 19.8947 2.90714L19.7759 2.73227L19.5833 2.64518C18.1437 1.99439 16.6386 1.51826 15.0686 1.25995ZM16.6074 10.7755L16.6074 10.7756C16.5934 11.6409 16.0212 12.1444 15.4783 12.1444C14.9297 12.1444 14.3493 11.6173 14.3493 10.7877C14.3493 9.94885 14.9378 9.41192 15.4783 9.41192C16.0471 9.41192 16.6209 9.93851 16.6074 10.7755ZM8.49373 12.1444C7.94513 12.1444 7.36471 11.6173 7.36471 10.7877C7.36471 9.94885 7.95323 9.41192 8.49373 9.41192C9.06038 9.41192 9.63892 9.93712 9.6417 10.7815C9.62517 11.6239 9.05462 12.1444 8.49373 12.1444Z"
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
-];
+export default function Index() {
+  const [similarity, setSimilarity] = useState<number | null>(null);
+  const [leftVector, setLeftVector] = useState<number[]>([]);
+  const [rightVector, setRightVector] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { isValid, errors },
+  } = useForm<FormState>({
+    resolver: zodResolver(formStateSchema),
+    defaultValues: loadState(),
+  });
+
+  const provider = watch("provider") as Provider;
+  const model = watch("model") as string;
+
+  const onSubmit = handleSubmit(async (data) => {
+    saveState(data);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const apiKey = data.apiKeys[data.provider];
+      if (!apiKey) {
+        throw new Error("API key is required");
+      }
+      const [embedding1, embedding2] = await getEmbeddings(
+        data.provider,
+        data.model,
+        [data.leftText, data.rightText],
+        apiKey
+      );
+      const similarityValue = cosineSimilarity(embedding1, embedding2);
+      setSimilarity(similarityValue);
+      setLeftVector(embedding1);
+      setRightVector(embedding2);
+    } catch (error) {
+      console.error("Error calculating similarity:", error);
+      setSimilarity(null);
+      setError(
+        "Error calculating similarity. Please check your API key and try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  });
+
+  const [histories, setHistories] = useState<EmbeddingHistory[]>([]);
+  useEffect(() => {
+    loadHistories().then(setHistories);
+  }, []);
+  // const saveHistory = useCallback(
+  //   (history: FormState) => {
+  //     setHistories([getHistoryFromState(history), ...histories]);
+  //     saveState(history);
+  //   },
+  //   [histories]
+  // );
+
+  return (
+    <>
+      <SideMenu side="right">
+        <ul>
+          <li className="mb-2">Clear</li>
+          {histories.map((history) => (
+            <li key={history.id}>{history.leftText}</li>
+          ))}
+        </ul>
+      </SideMenu>
+      <div className="container flex items-center justify-center mx-auto">
+        <div className="w-full max-w-6xl mx-auto p-16">
+          <h1 className="text-3xl font-bold mb-4">Embedding Playground</h1>
+          <p className="text-lg text-muted-foreground mb-8">
+            Compare texts similarity using various embedding models
+          </p>
+          <form onSubmit={onSubmit} className="space-y-8">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <Label htmlFor="provider" className="text-lg">
+                  Provider
+                </Label>
+                <Controller
+                  name="provider"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <SelectTrigger id="provider" className="w-full">
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="voyage">Voyage AI</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.provider && (
+                  <p className="text-sm text-red-500">
+                    {errors.provider.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-4">
+                <Label htmlFor="apiKey" className="text-lg">
+                  API Key
+                </Label>
+                <div className="relative">
+                  <Controller
+                    name={`apiKeys.${provider}`}
+                    control={control}
+                    render={({ field }) => (
+                      <Input
+                        {...field}
+                        id={`apiKey-${provider}`}
+                        type={showApiKey ? "text" : "password"}
+                        placeholder={`Enter your ${provider} API key`}
+                        className="pr-10 w-full"
+                      />
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {errors.apiKeys?.[provider] && (
+                  <p className="text-sm text-red-500">
+                    {errors.apiKeys?.[provider].message}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <Label htmlFor="model" className="text-lg">
+                Select a model
+              </Label>
+              <Table className="w-full border-collapse">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>name</TableHead>
+                    <TableHead>dimensions</TableHead>
+                    <TableHead>contextLength</TableHead>
+                    <TableHead>description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {modelsByProvider[provider as Provider].map((m) => (
+                    <TableRow
+                      key={m.name}
+                      className={`${
+                        m.name === model
+                          ? "bg-black dark:bg-white text-primary"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setValue("model", m.name);
+                      }}
+                      data-state={m.name === model ? "selected" : "unselected"}
+                    >
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell>{m.dimensions}</TableCell>
+                      <TableCell>{m.contextLength}</TableCell>
+                      <TableCell>{m.description}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {errors.model && (
+                <p className="text-sm text-red-500">{errors.model.message}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <Label htmlFor="leftText" className="text-lg">
+                  Text 1
+                </Label>
+                <Controller
+                  name="leftText"
+                  control={control}
+                  render={({ field }) => (
+                    <Textarea
+                      {...field}
+                      id="leftText"
+                      placeholder="Enter first text"
+                      className="h-48"
+                    />
+                  )}
+                />
+                {errors.leftText && (
+                  <p className="text-sm text-red-500">
+                    {errors.leftText.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-4">
+                <Label htmlFor="rightText" className="text-lg">
+                  Text 2
+                </Label>
+                <Controller
+                  name="rightText"
+                  control={control}
+                  render={({ field }) => (
+                    <Textarea
+                      {...field}
+                      id="rightText"
+                      placeholder="Enter second text"
+                      className="h-48"
+                    />
+                  )}
+                />
+                {errors.rightText && (
+                  <p className="text-sm text-red-500">
+                    {errors.rightText.message}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <Button type="submit" size="lg" disabled={isLoading || !isValid}>
+                Calculate Similarity
+              </Button>
+              {/* {similarity !== null && (
+                <Button type="button" onClick={saveHistory} variant="outline">
+                  Save Result
+                </Button>
+              )} */}
+            </div>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-semibold">Similarity Result</h3>
+                {isLoading && (
+                  <span className="text-sm text-muted-foreground animate-pulse">
+                    Calculating...
+                  </span>
+                )}
+              </div>
+              <SimilarityGauge similarity={similarity} />
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-medium">
+                  {similarity !== null
+                    ? `Cosine Similarity: ${similarity.toFixed(4)}`
+                    : "Enter text in both fields and provide an API key to calculate similarity"}
+                </span>
+                <VectorsPreviewDialog
+                  leftVector={leftVector}
+                  rightVector={rightVector}
+                  leftText={watch("leftText")}
+                  rightText={watch("rightText")}
+                />
+              </div>
+            </div>
+            {error && <div className="text-md text-red-500 mt-4">{error}</div>}
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
