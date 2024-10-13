@@ -15,7 +15,6 @@ import { Link } from "@remix-run/react";
 import { memo, useEffect, useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import LogoImg from "../../public/image/logo.svg";
 
 const schema = z.object({
   password: z.string().min(8),
@@ -243,9 +242,6 @@ const NewPasswordPage = () => {
 
   return (
     <div className="relative flex min-h-screen flex-col items-stretch justify-center bg-neutral-10">
-      <div className="absolute left-4 top-4">
-        <img src={LogoImg} alt="NoveLand" width={143} height={28} />
-      </div>
       <div className="mx-auto w-full max-w-3xl">
         <div className="rounded-lg bg-white p-8 shadow">
           {/* Email ownership verification */}
